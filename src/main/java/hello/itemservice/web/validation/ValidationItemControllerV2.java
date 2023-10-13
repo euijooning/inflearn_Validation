@@ -7,6 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.StringUtils;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -42,52 +45,46 @@ public class ValidationItemControllerV2 {
         return "validation/v2/addForm";
     }
 
-    // 실제 저장하는 곳
+    // 메서드명 변경
     @PostMapping("/add")
-    public String addItem(@ModelAttribute Item item,
-                          RedirectAttributes redirectAttributes,
-                          Model model) { // 모델 추가
-
-        // 검증 오류 결과 보관
-        Map<String, String> errors = new HashMap<>();
-        // => 만약 검증 시 오류가 발생하면 어떤 검증에서 발생했는지 정보를 담아둔다.
+    public String addItemV1(@ModelAttribute Item item,
+                            BindingResult bindingResult,
+                            RedirectAttributes redirectAttributes) {
 
         // 검증 로직
-        if (!StringUtils.hasText(item.getItemName())) { // StringUtils 임포트 추가(글자가 없냐)
-            errors.put("itemName", "상품 이름은 필수입니다."); // 키, 값 형태-> 나중에 화면에서 보여줄 것
+        if (!StringUtils.hasText(item.getItemName())) {
+            bindingResult.addError(new FieldError("item", "itemName", "상품 이름은 필수입니다."));
         }
         if (item.getPrice() == null || item.getPrice() < 1000 || item.getPrice() > 100000) {
-            errors.put("price", "가격은 1,000 ~ 1,000,000 까지 허용합니다.");
+            bindingResult.addError(new FieldError("item", "price", "가격은 1,000 ~ 1,000,000 까지 허용합니다."));
         }
         if (item.getQuantity() == null || item.getQuantity() >= 9999) {
-            errors.put("quantity", "수량은 최대 9,999 까지 허용합니다.");
+            bindingResult.addError(new FieldError("item", "quantity", "수량은 최대 9,999 까지 허용합니다."));
         }
 
-        // 특정 필드가 아닌 복합 룰 검증(특정 필드의 범위를 넘어서는 검증 로직)
-        //이때는 필드 이름을 넣을 수 없으므로 globalError 라는 key 를 사용한다.
+        // 특정 필드 예외가 아닌 전체 예외
         if (item.getPrice() != null && item.getQuantity() != null) {
             int resultPrice = item.getPrice() * item.getQuantity();
 
             if (resultPrice < 10000) {
-                errors.put("globalError", "[가격 X 수량]의 합은 10,000원 이상이어야 합니다. 현재 값 = " + resultPrice);
+                bindingResult.addError(new ObjectError("item", "[가격 X 수량]의 합은 10,000원 이상이어야 합니다. 현재 값 = " + resultPrice));
             }
         }
 
-        // 검증 실패 시 다시 입력 폼으로 돌려보내기
-        if (!errors.isEmpty()) { // 부정의 부정(=>긍정)이니까 읽는 데에 유의
-            log.info("errors = {}", errors);
-            model.addAttribute("errors", errors);
+        // 에러 남기고 리다이렉트
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
             return "validation/v2/addForm";
         }
 
-        // 성공 로직 (=> 에러에 해당 없는 상황! 최초 존재했던 코드)
+
+        // 성공 로직 (이건 유일하게 그대로)
         Item savedItem = itemRepository.save(item);
         redirectAttributes.addAttribute("itemId", savedItem.getId());
         redirectAttributes.addAttribute("status", true);
 
         return "redirect:/validation/v2/items/{itemId}";
     }
-
 
     @GetMapping("/{itemId}/edit")
     public String editForm(@PathVariable Long itemId, Model model) {

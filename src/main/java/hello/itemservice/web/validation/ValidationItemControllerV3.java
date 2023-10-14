@@ -79,8 +79,28 @@ public class ValidationItemControllerV3 {
         return "validation/v3/editForm";
     }
 
+
+    // 수정에 적용은 여기
     @PostMapping("/{itemId}/edit")
-    public String edit(@PathVariable Long itemId, @ModelAttribute Item item) {
+    public String edit(@PathVariable Long itemId,
+                       @Validated @ModelAttribute Item item,
+                       BindingResult bindingResult) {
+
+        //특정 필드 예외가 아닌 전체 예외
+        if (item.getPrice() != null && item.getQuantity() != null) {
+            int resultPrice = item.getPrice() * item.getQuantity();
+            if (resultPrice < 10000) {
+                bindingResult.reject("totalPriceMin",
+                        new Object[]{10000, resultPrice},null);
+            }
+        }
+
+        // 에러 남기고 리다이렉트
+        if (bindingResult.hasErrors()) {
+            log.info("errors={}", bindingResult);
+            return "validation/v3/editForm"; // addForm이 아니라 editForm으로 가야한다.
+        }
+
         itemRepository.update(itemId, item);
         return "redirect:/validation/v3/items/{itemId}";
     }
